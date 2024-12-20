@@ -18,7 +18,7 @@ def process_image(input_image_path):
 
 def main():
     # Streamlit App Title
-    st.title("Portrait Matting App")
+    st.title("UI ONE")
     st.write("Upload an image and get the portrait matting result.")
 
     # Upload image widget
