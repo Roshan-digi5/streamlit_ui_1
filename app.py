@@ -1,53 +1,75 @@
 import streamlit as st
-import cv2
-import numpy as np
-from modelscope.pipelines import pipeline
 from PIL import Image
-import tempfile
+import torch
+from torchvision import transforms
+from models.birefnet import BiRefNet
+from utils import check_state_dict
+import io
 
-# Load the pipeline for portrait matting
-portrait_matting = pipeline('portrait-matting')
+import warnings
+warnings.filterwarnings("ignore")
+# Load BiRefNet Model and Weights
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+torch.set_float32_matmul_precision('high')
 
-def process_image(input_image_path):
-    """
-    Process the image using the portrait matting pipeline and return the result image path.
-    """
-    result = portrait_matting(input_image_path)
-    output_img = result['output_img']
-    return output_img
+birefnet = BiRefNet(bb_pretrained=False)
+state_dict = torch.load('BiRefNet-massive-TR_DIS5K_TR_TEs-epoch_420.pth', map_location=device)
+state_dict = check_state_dict(state_dict)
+birefnet.load_state_dict(state_dict)
+birefnet.to(device)
+birefnet.eval()
 
-def main():
-    # Streamlit App Title
-    st.title("UI ONE")
-    st.write("Upload an image and get the portrait matting result.")
+# Transformation for Input Image
+transform_image = transforms.Compose([
+    transforms.Resize((1024, 1024)),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+])
 
-    # Upload image widget
-    uploaded_file = st.file_uploader("Upload an Image", type=["jpg", "png", "jpeg"])
+# Process Image Function
+def process_image(image):
+    # Preprocess the image
+    input_image = transform_image(image).unsqueeze(0).to(device)
 
-    if uploaded_file is not None:
-        # Convert uploaded image to a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_input:
-            temp_input.write(uploaded_file.read())
-            input_image_path = temp_input.name
-        
-        # Display the uploaded image
-        st.subheader("Uploaded Image")
-        uploaded_image = Image.open(input_image_path)
-        st.image(uploaded_image, caption="Input Image", use_column_width=True)
-        
-        # Process the image
-        st.subheader("Processing...")
-        output_img = process_image(input_image_path)
-        
-        # Save the result to a temporary file for display
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_output:
-            cv2.imwrite(temp_output.name, output_img)
-            result_image_path = temp_output.name
+    # Model prediction
+    with torch.no_grad():
+        preds = birefnet(input_image)[-1].sigmoid().cpu()
+    pred = preds[0].squeeze()
 
-        # Display the result image
-        st.subheader("Result Image")
-        result_image = Image.open(result_image_path)
-        st.image(result_image, caption="Portrait Matting Result", use_column_width=True)
+    # Convert prediction to PIL image
+    pred_pil = transforms.ToPILImage()(pred)
 
-if __name__ == "__main__":
-    main()
+    # Apply the mask to the original image
+    image_masked = image.resize((1024, 1024))
+    image_masked.putalpha(pred_pil)
+
+    return image_masked
+
+# Streamlit UI
+st.title("BiRefNet Watermark Removal")
+
+st.write("Upload an image, and the model will process it to remove the watermark.")
+
+uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
+
+if uploaded_file is not None:
+    # Load image
+    image = Image.open(uploaded_file).convert("RGB")
+    
+    # Process the image
+    processed_image = process_image(image)
+    
+    # Display processed image
+    st.image(processed_image, caption="Processed Image", use_column_width=True)
+    
+    # Convert image to bytes and create a downloadable link
+    buffered = io.BytesIO()
+    processed_image.save(buffered, format="PNG")
+    buffered.seek(0)
+    
+    st.download_button(
+        label="Download Processed Image",
+        data=buffered,
+        file_name="processed_image.png",
+        mime="image/png"
+    )
