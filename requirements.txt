@@ -59,6 +59,7 @@ sympy==1.13.1
 tabulate==0.9.0
 tenacity==9.0.0
 tifffile==2025.1.10
+transformers
 timm==1.0.13
 toml==0.10.2
 torch==2.5.1
