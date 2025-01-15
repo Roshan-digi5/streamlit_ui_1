@@ -12,10 +12,8 @@ warnings.filterwarnings("ignore")
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 torch.set_float32_matmul_precision('high')
 
-birefnet = BiRefNet(bb_pretrained=False)
-state_dict = torch.load('BiRefNet-massive-TR_DIS5K_TR_TEs-epoch_420.pth', map_location=device)
-state_dict = check_state_dict(state_dict)
-birefnet.load_state_dict(state_dict)
+from transformers import AutoModelForImageSegmentation
+birefnet = AutoModelForImageSegmentation.from_pretrained('zhengpeng7/BiRefNet-DIS5K-TR_TEs', trust_remote_code=True)
 birefnet.to(device)
 birefnet.eval()
 
