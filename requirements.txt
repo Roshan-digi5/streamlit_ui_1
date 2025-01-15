@@ -10,6 +10,7 @@ kornia
 einops
 
 tqdm
+transformers
 prettytable
 tabulate
 
