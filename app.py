@@ -2,8 +2,6 @@ import streamlit as st
 from PIL import Image
 import torch
 from torchvision import transforms
-from birefnet import BiRefNet
-from utils import check_state_dict
 import io
 
 import warnings
